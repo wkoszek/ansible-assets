@@ -20,6 +20,8 @@ def main
     exit
   end
 
+  sanity_check
+
   all_blocks = []
   ARGV.each do |arg|
     doing_dirs = 0
@@ -28,11 +30,11 @@ def main
     end
     all_blocks << process_ansible_file(arg, doing_dirs)
   end
-  print all_blocks.to_yaml
+  puts all_blocks.to_yaml
 end
 
 def usage
-  print "./ansible-lint.rb yaml_file [[yaml_file2] .. ]\n"
+  puts "./ansible-lint.rb [--init] yaml_file [[yaml_file2] .. ]"
   exit 64
 end
 
@@ -43,9 +45,18 @@ end
 
 def write_if_not_exist(file_name, content)
   if File.exist?(file_name)
-    print "File #{file_name} exists already. Won't create!"
+    puts "File '#{file_name}' exists already. Won't create!"
   else
     File.write(file_name, content)
+  end
+end
+
+def sanity_check
+  if !File.directory?(WHERE_FILES_ARE)
+    puts "No directory '#{WHERE_FILES_ARE}' with files to sync."
+    puts "  Make it and assume it's yours remote server '/'"
+    puts "  Add your files in files/etc/..., files/var/... etc. and retry"
+    exit
   end
 end
 
@@ -81,7 +92,12 @@ def process_ansible_file(filename, doing_dirs=0)
 end
 
 def ask_msg_default(msg, default)
-  print "#{msg} [#{default}] "
+  puts "#{msg} [default: #{default}] "
+  val = STDIN.gets.strip
+  if val.length <= 0
+    val = default
+  end
+  val
 end
 
 def ansible_block_by_name(ansible_yaml, name)
