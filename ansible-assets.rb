@@ -13,9 +13,10 @@ def main
     usage
   end
 
-  is_init = ARGV.select{|a| a =~ /^--init$/}.length > 0
+  # http://stackoverflow.com/questions/26434923/parse-command-line-arguments-in-a-ruby-script
+  cfg = Hash[ ARGV.flat_map{|s| s.scan(/--?([^=\s]+)(?:=(\S+))?/) } ]
 
-  if is_init
+  if cfg.include?("init")
     do_init
     exit
   end
@@ -28,13 +29,13 @@ def main
     if arg =~ /asset_dir/
       doing_dirs = 1
     end
-    all_blocks << process_ansible_file(arg, doing_dirs)
+    all_blocks << process_ansible_file(cfg, arg, doing_dirs)
   end
   puts all_blocks.to_yaml
 end
 
 def usage
-  puts "./ansible-lint.rb [--init] yaml_file [[yaml_file2] .. ]"
+  STDERR.puts "./ansible-lint.rb [--init|--interactive] yaml_file [[yaml_file2] .. ]"
   exit 64
 end
 
@@ -45,7 +46,7 @@ end
 
 def write_if_not_exist(file_name, content)
   if File.exist?(file_name)
-    puts "File '#{file_name}' exists already. Won't create!"
+    STDERR.puts "File '#{file_name}' exists already. Won't create!"
   else
     File.write(file_name, content)
   end
@@ -53,14 +54,14 @@ end
 
 def sanity_check
   if !File.directory?(WHERE_FILES_ARE)
-    puts "No directory '#{WHERE_FILES_ARE}' with files to sync."
-    puts "  Make it and assume it's yours remote server '/'"
-    puts "  Add your files in files/etc/..., files/var/... etc. and retry"
+    STDERR.puts "No directory '#{WHERE_FILES_ARE}' with files to sync."
+    STDERR.puts "  Make it and assume it's yours remote server '/'"
+    STDERR.puts "  Add your files in files/etc/..., files/var/... etc. and retry"
     exit
   end
 end
 
-def process_ansible_file(filename, doing_dirs=0)
+def process_ansible_file(cfg, filename, doing_dirs=0)
   d = File.read(filename)
   y = YAML.load(d)
 
@@ -80,9 +81,9 @@ def process_ansible_file(filename, doing_dirs=0)
   dirs_not_yet.each do |d|
     files_to_add << {
       "fn" => d,
-      "owner" => ask_msg_default("#{d} owner is?", "root"),
-      "group" => ask_msg_default("#{d} group is?", "root"),
-      "mode" => ask_msg_default("#{d} mode is?", "0655")
+      "owner" => ask_msg_default(cfg, "#{d} owner is?", "root"),
+      "group" => ask_msg_default(cfg, "#{d} group is?", "root"),
+      "mode" => ask_msg_default(cfg, "#{d} mode is?", "0655")
     }
   end
 
@@ -91,9 +92,12 @@ def process_ansible_file(filename, doing_dirs=0)
   return ansible_dirs_block
 end
 
-def ask_msg_default(msg, default)
-  puts "#{msg} [default: #{default}] "
-  val = STDIN.gets.strip
+def ask_msg_default(cfg, msg, default)
+  STDERR.puts "#{msg} [default: #{default}] "
+  val = ""
+  if cfg.include?("interactive")
+    val = STDIN.gets.strip
+  end
   if val.length <= 0
     val = default
   end
